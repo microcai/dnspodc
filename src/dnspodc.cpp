@@ -211,6 +211,12 @@ void update_record(std::string login_token, std::string domain, std::string subd
 	easy_http_post(io, "https://dnsapi.cn/Record.List", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)},
 		[&io, login_token, domain, subdomain, address](boost::system::error_code ec, std::string response_body)
 	{
+		if (ec)
+		{
+			std::cerr << "get record id failed: " << ec.message() << std::endl;
+			exit(1);
+		}
+
 		std::string err;
 		auto resp = json11::Json::parse(response_body, err);
 
@@ -237,6 +243,12 @@ void update_record(std::string login_token, std::string domain, std::string subd
 				easy_http_post(io, "https://dnsapi.cn/Record.Modify", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)},
 					[&io, login_token, domain, subdomain, address](boost::system::error_code ec, std::string response_body)
 				{
+					if (ec)
+					{
+						std::cerr << "update record failed: " << ec.message() << std::endl;
+						exit(1);
+					}
+
 					std::string err;
 					auto resp = json11::Json::parse(response_body, err);
 

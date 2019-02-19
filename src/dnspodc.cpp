@@ -163,7 +163,7 @@ int main(int argc, char* argv[])
 		("v6only", po::value<bool>(&v6only)->default_value(true), "only update AAAA record")
 		("dev", po::value<std::string>(&dev), "interface name")
 		("addr", po::value<std::string>(&addr), "manual set ipv6 address instead of query from NIC")
-		("noupdate", po::value<bool>(&noupdate), "only print ipv6 address, no update")
+		("noupdate", "only print ipv6 address, no update")
 		;
 
 	variables_map vm;
@@ -175,6 +175,8 @@ int main(int argc, char* argv[])
 		std::cout << desc << "\n";
 		return 0;
 	}
+
+	noupdate = vm.count("noupdate");
 
 	if (addr.empty())
 	{

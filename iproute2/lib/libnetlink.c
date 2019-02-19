@@ -25,12 +25,26 @@
 
 #include "libnetlink.h"
 
+#include <linux/if_link.h>
+
 #ifndef SOL_NETLINK
 #define SOL_NETLINK 270
 #endif
 
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+#ifndef NETLINK_SOCK_DIAG
+#define NETLINK_SOCK_DIAG	4	/* socket monitoring				*/
+#endif
+
+#ifndef NLM_F_DUMP_INTR
+#define NLM_F_DUMP_INTR		0x10	/* Dump was inconsistent due to sequence change */
+#endif
+
+#ifndef RTEXT_FILTER_VF
+#define RTEXT_FILTER_VF		(1 << 0)
 #endif
 
 int rcvbuf = 1024 * 1024;
@@ -161,10 +175,11 @@ int rtnl_open_byproto(struct rtnl_handle *rth, unsigned int subscriptions,
 		perror("SO_RCVBUF");
 		return -1;
 	}
-
+#ifdef NETLINK_EXT_ACK
 	/* Older kernels may no support extended ACK reporting */
 	setsockopt(rth->fd, SOL_NETLINK, NETLINK_EXT_ACK,
 		   &one, sizeof(one));
+#endif
 
 	memset(&rth->local, 0, sizeof(rth->local));
 	rth->local.nl_family = AF_NETLINK;
@@ -251,26 +266,6 @@ int rtnl_wilddump_req_filter_fn(struct rtnl_handle *rth, int family, int type,
 		return err;
 
 	return send(rth->fd, &req, req.nlh.nlmsg_len, 0);
-}
-
-int rtnl_wilddump_stats_req_filter(struct rtnl_handle *rth, int fam, int type,
-				   __u32 filt_mask)
-{
-	struct {
-		struct nlmsghdr nlh;
-		struct if_stats_msg ifsm;
-	} req;
-
-	memset(&req, 0, sizeof(req));
-	req.nlh.nlmsg_len = NLMSG_LENGTH(sizeof(struct if_stats_msg));
-	req.nlh.nlmsg_type = type;
-	req.nlh.nlmsg_flags = NLM_F_DUMP|NLM_F_REQUEST;
-	req.nlh.nlmsg_pid = 0;
-	req.nlh.nlmsg_seq = rth->dump = ++rth->seq;
-	req.ifsm.family = fam;
-	req.ifsm.filter_mask = filt_mask;
-
-	return send(rth->fd, &req, sizeof(req), 0);
 }
 
 int rtnl_send(struct rtnl_handle *rth, const void *buf, int len)
@@ -743,117 +738,6 @@ int rtnl_talk_suppress_rtnl_errmsg(struct rtnl_handle *rtnl, struct nlmsghdr *n,
 				   struct nlmsghdr **answer)
 {
 	return __rtnl_talk(rtnl, n, answer, false, NULL);
-}
-
-int rtnl_listen_all_nsid(struct rtnl_handle *rth)
-{
-	unsigned int on = 1;
-
-	if (setsockopt(rth->fd, SOL_NETLINK, NETLINK_LISTEN_ALL_NSID, &on,
-		       sizeof(on)) < 0) {
-		perror("NETLINK_LISTEN_ALL_NSID");
-		return -1;
-	}
-	rth->flags |= RTNL_HANDLE_F_LISTEN_ALL_NSID;
-	return 0;
-}
-
-int rtnl_listen(struct rtnl_handle *rtnl,
-		rtnl_listen_filter_t handler,
-		void *jarg)
-{
-	int status;
-	struct nlmsghdr *h;
-	struct sockaddr_nl nladdr = { .nl_family = AF_NETLINK };
-	struct iovec iov;
-	struct msghdr msg = {
-		.msg_name = &nladdr,
-		.msg_namelen = sizeof(nladdr),
-		.msg_iov = &iov,
-		.msg_iovlen = 1,
-	};
-	char   buf[16384];
-	char   cmsgbuf[BUFSIZ];
-
-	if (rtnl->flags & RTNL_HANDLE_F_LISTEN_ALL_NSID) {
-		msg.msg_control = &cmsgbuf;
-		msg.msg_controllen = sizeof(cmsgbuf);
-	}
-
-	iov.iov_base = buf;
-	while (1) {
-		struct rtnl_ctrl_data ctrl;
-		struct cmsghdr *cmsg;
-
-		iov.iov_len = sizeof(buf);
-		status = recvmsg(rtnl->fd, &msg, 0);
-
-		if (status < 0) {
-			if (errno == EINTR || errno == EAGAIN)
-				continue;
-			fprintf(stderr, "netlink receive error %s (%d)\n",
-				strerror(errno), errno);
-			if (errno == ENOBUFS)
-				continue;
-			return -1;
-		}
-		if (status == 0) {
-			fprintf(stderr, "EOF on netlink\n");
-			return -1;
-		}
-		if (msg.msg_namelen != sizeof(nladdr)) {
-			fprintf(stderr,
-				"Sender address length == %d\n",
-				msg.msg_namelen);
-			exit(1);
-		}
-
-		if (rtnl->flags & RTNL_HANDLE_F_LISTEN_ALL_NSID) {
-			memset(&ctrl, 0, sizeof(ctrl));
-			ctrl.nsid = -1;
-			for (cmsg = CMSG_FIRSTHDR(&msg); cmsg;
-			     cmsg = CMSG_NXTHDR(&msg, cmsg))
-				if (cmsg->cmsg_level == SOL_NETLINK &&
-				    cmsg->cmsg_type == NETLINK_LISTEN_ALL_NSID &&
-				    cmsg->cmsg_len == CMSG_LEN(sizeof(int))) {
-					int *data = (int *)CMSG_DATA(cmsg);
-
-					ctrl.nsid = *data;
-				}
-		}
-
-		for (h = (struct nlmsghdr *)buf; status >= sizeof(*h); ) {
-			int err;
-			int len = h->nlmsg_len;
-			int l = len - sizeof(*h);
-
-			if (l < 0 || len > status) {
-				if (msg.msg_flags & MSG_TRUNC) {
-					fprintf(stderr, "Truncated message\n");
-					return -1;
-				}
-				fprintf(stderr,
-					"!!!malformed message: len=%d\n",
-					len);
-				exit(1);
-			}
-
-			err = handler(&nladdr, &ctrl, h, jarg);
-			if (err < 0)
-				return err;
-
-			status -= NLMSG_ALIGN(len);
-			h = (struct nlmsghdr *)((char *)h + NLMSG_ALIGN(len));
-		}
-		if (msg.msg_flags & MSG_TRUNC) {
-			fprintf(stderr, "Message truncated\n");
-			continue;
-		}
-		if (status) {
-			fprintf(stderr, "!!!Remnant of size %d\n", status);
-			exit(1);
-		}
-	}
 }
 
 int rtnl_from_file(FILE *rtnl, rtnl_listen_filter_t handler,

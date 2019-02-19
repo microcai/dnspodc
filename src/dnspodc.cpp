@@ -201,10 +201,6 @@ void update_record(std::string login_token, std::string domain, std::string subd
 		[&io, login_token, domain, subdomain, address](boost::system::error_code ec, std::string response_body)
 	{
 		std::string err;
-		if (ec)
-			std::cerr << ec.message() << std::endl;
-		std::cerr << response_body << std::endl;
-
 		auto resp = json11::Json::parse(response_body, err);
 
 		if (resp["status"]["code"] == "1")
@@ -229,14 +225,23 @@ void update_record(std::string login_token, std::string domain, std::string subd
 					[&io, login_token, domain, subdomain, address](boost::system::error_code ec, std::string response_body)
 				{
 					std::string err;
-					if (ec)
-						std::cerr << ec.message() << std::endl;
-					std::cerr << response_body << std::endl;
-
 					auto resp = json11::Json::parse(response_body, err);
+
+					if (resp["status"]["code"] == "1")
+					{
+						std::cout << "update success full" << std::endl;
+					}
+					else
+					{
+						std::cerr << response_body << std::endl;
+					}
 				});
 
 			}
+		}
+		else
+		{
+			std::cerr << response_body << std::endl;
 		}
 
 

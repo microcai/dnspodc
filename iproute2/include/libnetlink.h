@@ -10,7 +10,7 @@
 #include <linux/if_link.h>
 #include <linux/if_addr.h>
 #include <linux/neighbour.h>
-#include <linux/netconf.h>
+//#include <linux/netconf.h>
 #include <arpa/inet.h>
 
 struct rtnl_handle {

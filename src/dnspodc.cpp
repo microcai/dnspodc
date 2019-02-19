@@ -74,52 +74,55 @@ std::string getifaddr(std::string ifname)
 		if (ifaddr_iterator->ifa_addr == NULL)
 			continue;
 
-		if ( ifname == ifaddr_iterator->ifa_name && (ifaddr_iterator->ifa_addr->sa_family==AF_INET6) )
+		if ( ifaddr_iterator->ifa_addr->sa_family==AF_INET6 )
 		{
-			sockaddr_in6 * soaddr6 = (sockaddr_in6 * )ifaddr_iterator->ifa_addr;
-
-			if (soaddr6->sin6_scope_id == 0)
+			if (ifname.empty() || ifname == ifaddr_iterator->ifa_name)
 			{
-				boost::asio::ip::address_v6::bytes_type rawbytes_of_addr;
-				memcpy(rawbytes_of_addr.data(), soaddr6->sin6_addr.s6_addr, 16);
+				sockaddr_in6 * soaddr6 = (sockaddr_in6 * )ifaddr_iterator->ifa_addr;
 
-				boost::asio::ip::address_v6 v6addr(rawbytes_of_addr, soaddr6->sin6_scope_id);
-
-				if (rawbytes_of_addr[0] == 0xfd)
-					continue;
-
-				printf("\tInterface : <%s>\n",ifaddr_iterator->ifa_name );
-				printf("\t  Address : <%s>\n", v6addr.to_string().c_str());
-
-				for (auto _ainfo : ainfo)
+				if (soaddr6->sin6_scope_id == 0)
 				{
-					struct nlmsghdr *n1 = _ainfo.get();
-					struct ifaddrmsg *ifa = (struct ifaddrmsg *) (  NLMSG_DATA(n1) );
+					boost::asio::ip::address_v6::bytes_type rawbytes_of_addr;
+					memcpy(rawbytes_of_addr.data(), soaddr6->sin6_addr.s6_addr, 16);
 
-					if (ifa->ifa_index != if_nametoindex(ifaddr_iterator->ifa_name))
+					boost::asio::ip::address_v6 v6addr(rawbytes_of_addr, soaddr6->sin6_scope_id);
+
+					if (rawbytes_of_addr[0] == 0xfd)
 						continue;
 
-					if (n1->nlmsg_type != RTM_NEWADDR)
-						continue;
+					printf("\tInterface : <%s>\n",ifaddr_iterator->ifa_name );
+					printf("\t  Address : <%s>\n", v6addr.to_string().c_str());
 
-					if (n1->nlmsg_len < NLMSG_LENGTH(sizeof(*ifa)))
-						throw std::runtime_error("dump failed");
-
-					struct rtattr *rta_tb[IFA_MAX+1];
-
-					parse_rtattr(rta_tb, IFA_MAX, IFA_RTA(ifa),
-							n1->nlmsg_len - NLMSG_LENGTH(sizeof(*ifa)));
-
-					if (memcmp(rawbytes_of_addr.data(), RTA_DATA(rta_tb[IFA_ADDRESS]), 16) == 0)
+					for (auto _ainfo : ainfo)
 					{
-						if (rta_tb[IFA_CACHEINFO])
+						struct nlmsghdr *n1 = _ainfo.get();
+						struct ifaddrmsg *ifa = (struct ifaddrmsg *) (  NLMSG_DATA(n1) );
+
+						if (ifa->ifa_index != if_nametoindex(ifaddr_iterator->ifa_name))
+							continue;
+
+						if (n1->nlmsg_type != RTM_NEWADDR)
+							continue;
+
+						if (n1->nlmsg_len < NLMSG_LENGTH(sizeof(*ifa)))
+							throw std::runtime_error("dump failed");
+
+						struct rtattr *rta_tb[IFA_MAX+1];
+
+						parse_rtattr(rta_tb, IFA_MAX, IFA_RTA(ifa),
+								n1->nlmsg_len - NLMSG_LENGTH(sizeof(*ifa)));
+
+						if (memcmp(rawbytes_of_addr.data(), RTA_DATA(rta_tb[IFA_ADDRESS]), 16) == 0)
 						{
-							struct ifa_cacheinfo *ci = (struct ifa_cacheinfo *)(RTA_DATA(rta_tb[IFA_CACHEINFO]));
-							printf("\t  valid_lft : %d sec\n", ci->ifa_prefered);
-							addr_info info;
-							info.addr_v6 = v6addr;
-							info.valid_lft = ci->ifa_prefered;
-							addr_infos.push_back(info);
+							if (rta_tb[IFA_CACHEINFO])
+							{
+								struct ifa_cacheinfo *ci = (struct ifa_cacheinfo *)(RTA_DATA(rta_tb[IFA_CACHEINFO]));
+								printf("\tvalid_lft : %d sec\n", ci->ifa_prefered);
+								addr_info info;
+								info.addr_v6 = v6addr;
+								info.valid_lft = ci->ifa_prefered;
+								addr_infos.push_back(info);
+							}
 						}
 					}
 				}
@@ -138,6 +141,7 @@ std::string getifaddr(std::string ifname)
 	if (addr_infos.empty())
 		return "";
 
+	printf("selected address <%s>\n", addr_infos[0].addr_v6.to_string().c_str());
 	return addr_infos[0].addr_v6.to_string();
 }
 
@@ -156,7 +160,7 @@ int main(int argc, char* argv[])
 		("domain", po::value<std::string>(&domain), "domain for operation")
 		("subdomain", po::value<std::string>(&subdomain), "subdomain for operation")
 		("v6only", po::value<bool>(&v6only)->default_value(true), "only update AAAA record")
-		("dev", po::value<std::string>(&dev)->default_value("eth0"), "interface name")
+		("dev", po::value<std::string>(&dev), "interface name")
 		;
 
 	variables_map vm;

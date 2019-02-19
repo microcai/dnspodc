@@ -186,14 +186,56 @@ void update_record(std::string login_token, std::string domain, std::string subd
 
 	std::vector<std::pair<std::string, std::string>> params = {
 		{ "login_token", login_token },
-		{ "format" , "json" } ,
+		{ "format" , "json" },
+		{ "domain", domain },
+		{ "sub_domain", subdomain },
+		{ "length", "3000" },
+		{ "record_type", "AAAA" },
 	};
 
-	easy_http_post(io, "https://dnsapi.cn/Domain.List", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_string(params)}, [](boost::system::error_code ec, std::string response_body)
+	easy_http_post(io, "https://dnsapi.cn/Record.List", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)},
+		[&io, login_token, domain, subdomain, address](boost::system::error_code ec, std::string response_body)
 	{
+		std::string err;
 		if (ec)
 			std::cerr << ec.message() << std::endl;
 		std::cerr << response_body << std::endl;
+
+		auto resp = json11::Json::parse(response_body, err);
+
+		if (resp["status"]["code"] == "1")
+		{
+			for (auto recordinfo : resp["records"].array_items())
+			{
+
+				auto record_id = recordinfo["id"].string_value();
+
+				std::vector<std::pair<std::string, std::string>> params = {
+					{ "login_token", login_token },
+					{ "format" , "json" },
+					{ "domain", domain },
+					{ "sub_domain", subdomain },
+					{ "record_id", record_id },
+					{ "record_line", recordinfo["line"].string_value() },
+					{ "value", address },
+					{ "record_type", "AAAA" },
+				};
+
+				easy_http_post(io, "https://dnsapi.cn/Record.Modify", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)},
+					[&io, login_token, domain, subdomain, address](boost::system::error_code ec, std::string response_body)
+				{
+					std::string err;
+					if (ec)
+						std::cerr << ec.message() << std::endl;
+					std::cerr << response_body << std::endl;
+
+					auto resp = json11::Json::parse(response_body, err);
+				});
+
+			}
+		}
+
+
 	});
 
 	// 有了 record_id 就可以更新 AAAA 记录了.

@@ -50,6 +50,8 @@ find_package(Threads)
 
 link_libraries(${CMAKE_THREAD_LIBS_INITD})
 
+add_definitions(-DAVHTTP_ENABLE_OPENSSL)
+
 if(USE_SYSTEM_OPENSSL)
 
 find_package(OpenSSL REQUIRED)

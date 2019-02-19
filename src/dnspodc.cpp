@@ -31,17 +31,19 @@ static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n,
 
 std::string getifaddr(std::string ifname)
 {
-	struct ifaddrs *ifaddr, *ifaddr_iterator;
-	int family, s;
-	char host[NI_MAXHOST];
+	std::shared_ptr<ifaddrs> auto_free;
 
-	if (getifaddrs(&ifaddr) == -1)
 	{
-		perror("getifaddrs");
-		exit(EXIT_FAILURE);
-	}
+		struct ifaddrs *ifaddr;
 
-	std::shared_ptr<ifaddrs> auto_free(ifaddr, freeifaddrs);
+		if (getifaddrs(&ifaddr) == -1)
+		{
+			perror("getifaddrs");
+			exit(EXIT_FAILURE);
+		}
+
+		auto_free.reset(ifaddr, freeifaddrs);
+	}
 
 	rtnl_handle rth;
 
@@ -67,7 +69,7 @@ std::string getifaddr(std::string ifname)
 
 	std::vector<addr_info> addr_infos;
 
-	for (ifaddr_iterator = ifaddr; ifaddr_iterator != NULL; ifaddr_iterator = ifaddr_iterator->ifa_next)
+	for (auto ifaddr_iterator = auto_free.get(); ifaddr_iterator != NULL; ifaddr_iterator = ifaddr_iterator->ifa_next)
 	{
 		if (ifaddr_iterator->ifa_addr == NULL)
 			continue;
@@ -173,10 +175,28 @@ int main(int argc, char* argv[])
 	update_record(login_token, domain, subdomain, v6_address);
 }
 
+#include "easyhttp.hpp"
+
+#include "pay_utility.hpp"
+
 void update_record(std::string login_token, std::string domain, std::string subdomain, std::string address)
 {
+	boost::asio::io_context io;
 	// 首先, 登录到 dnspod 获取 domian id, 然后用 domain 获取 record_id
+
+	std::vector<std::pair<std::string, std::string>> params = {
+		{ "login_token", login_token },
+		{ "format" , "json" } ,
+	};
+
+	easy_http_post(io, "https://dnsapi.cn/Domain.List", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_string(params)}, [](boost::system::error_code ec, std::string response_body)
+	{
+		if (ec)
+			std::cerr << ec.message() << std::endl;
+		std::cerr << response_body << std::endl;
+	});
 
 	// 有了 record_id 就可以更新 AAAA 记录了.
 
+	io.run();
 }

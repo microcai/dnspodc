@@ -14,4 +14,4 @@ add_executable(dnspodc dnspodc.cpp )
 
 target_link_libraries(dnspodc Boost::thread Boost::program_options)
 
-target_link_libraries(dnspodc iproute2)
+target_link_libraries(dnspodc utility iproute2)

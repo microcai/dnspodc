@@ -12,7 +12,8 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 option(USE_SYSTEM_OPENSSL "use system supplied openssl" OFF)
 option(Boost_USE_STATIC_LIBS "use static Boost" ON)
-option(ODB_CROSS "use static Boost" OFF)
+
+option(STATIC_EXE "static link" OFF)
 
 include(cpacksettings.cmake)
 include(CPack)
@@ -45,6 +46,10 @@ if (HAS_CXX14)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 ")
 endif()
 endif(MSVC)
+
+if (STATIC_EXE)
+	set(CMAKE_CXX_FLAGS "-static -static-libgcc")
+endif()
 
 find_package(Threads)
 

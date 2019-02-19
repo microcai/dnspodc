@@ -149,8 +149,9 @@ static void update_record(std::string login_token, std::string domain, std::stri
 
 int main(int argc, char* argv[])
 {
-	std::string domain, subdomain, login_token, dev;
+	std::string domain, subdomain, login_token, dev, addr;
 	bool v6only;
+	bool noupdate = false;
 
 	options_description desc("options");
 	desc.add_options()
@@ -161,6 +162,8 @@ int main(int argc, char* argv[])
 		("subdomain", po::value<std::string>(&subdomain), "subdomain for operation")
 		("v6only", po::value<bool>(&v6only)->default_value(true), "only update AAAA record")
 		("dev", po::value<std::string>(&dev), "interface name")
+		("addr", po::value<std::string>(&addr), "manual set ipv6 address instead of query from NIC")
+		("noupdate", po::value<bool>(&noupdate), "only print ipv6 address, no update")
 		;
 
 	variables_map vm;
@@ -173,10 +176,18 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 
-	auto v6_address =  getifaddr(dev);
-
-	// now, update the record.
-	update_record(login_token, domain, subdomain, v6_address);
+	if (addr.empty())
+	{
+		auto v6_address =  getifaddr(dev);
+		// now, update the record.
+		if (!noupdate)
+			update_record(login_token, domain, subdomain, v6_address);
+	}
+	else
+	{
+		if (!noupdate)
+			update_record(login_token, domain, subdomain, addr);
+	}
 }
 
 #include "easyhttp.hpp"
@@ -209,6 +220,8 @@ void update_record(std::string login_token, std::string domain, std::string subd
 			{
 
 				auto record_id = recordinfo["id"].string_value();
+
+				std::cout << "record_id is " << record_id << std::endl;
 
 				std::vector<std::pair<std::string, std::string>> params = {
 					{ "login_token", login_token },

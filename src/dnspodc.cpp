@@ -178,6 +178,9 @@ int main(int argc, char* argv[])
 
 	noupdate = vm.count("noupdate");
 
+	if (vm.count("login_token") ==0 || vm.count("domain") ==0 || vm.count("subdomain") ==0)
+		noupdate = true;
+
 	if (addr.empty())
 	{
 		auto v6_address =  getifaddr(dev);

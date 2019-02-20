@@ -102,6 +102,6 @@ add_subdirectory(utility)
 add_subdirectory(iproute2)
 add_subdirectory(src)
 
-install(FILE ddns.timer DESTINATION /usr/lib/systemd/system)
-install(FILE ddns.service DESTINATION /usr/lib/systemd/system)
+install(FILES ddns.timer DESTINATION /usr/lib/systemd/system)
+install(FILES ddns.service DESTINATION /usr/lib/systemd/system)
 

@@ -12,6 +12,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 option(USE_SYSTEM_OPENSSL "use system supplied openssl" OFF)
 option(Boost_USE_STATIC_LIBS "use static Boost" ON)
+option(USE_SYSTEM_BOOST "use system supplied boost" OFF)
 
 option(STATIC_EXE "static link" OFF)
 
@@ -78,12 +79,17 @@ if(WIN32)
 	add_definitions(-DNOMINMAX)
 endif()
 
+if (USE_SYSTEM_BOOST)
+find_package(Boost 1.64 COMPONENTS filesystem locale thread program_options regex date_time)
+
+else()
 set(Boost_USE_STATIC_LIBS ON)
 add_subdirectory(3rd-src/boost EXCLUDE_FROM_ALL)
 include_directories(3rd-src/boost)
 set(Boost_LIBRARIES Boost::filesystem Boost::system Boost::thread Boost::date_time Boost::program_options Boost::regex Boost::locale)
 
 set(BOOST_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/3rd-src/boost)
+endif()
 
 add_subdirectory(3rd-src/json11)
 
@@ -95,3 +101,5 @@ include_directories(3rd-src/avhttp/include)
 add_subdirectory(utility)
 add_subdirectory(iproute2)
 add_subdirectory(src)
+
+install()

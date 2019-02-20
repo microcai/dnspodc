@@ -87,7 +87,7 @@ std::string getifaddr(std::string ifname)
 
 					boost::asio::ip::address_v6 v6addr(rawbytes_of_addr, soaddr6->sin6_scope_id);
 
-					if (rawbytes_of_addr[0] == 0xfd)
+					if (rawbytes_of_addr[0] == 0xfd || rawbytes_of_addr[0] == 0xfc)
 						continue;
 
 					printf("\tInterface : <%s>\n",ifaddr_iterator->ifa_name );

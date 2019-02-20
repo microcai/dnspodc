@@ -32,7 +32,7 @@ add_library(utility STATIC
 	src/easyhttp.cpp
 )
 
-target_link_libraries(utility Boost::system Boost::thread Boost::regex Boost::locale Boost::date_time Boost::filesystem
+target_link_libraries(utility Boost::thread Boost::regex Boost::locale Boost::date_time Boost::filesystem
 	json11 ${ZLIB_LIBRARIES}
 	${CMAKE_THREAD_LIBS_INIT})
 

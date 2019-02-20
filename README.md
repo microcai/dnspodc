@@ -18,7 +18,7 @@ configured ipv6 address and then update that into dnspod
 ## Rational
 
 In DHCPv6-PD + SLAAC setup, when pppoe connection reconnect, the router will
-advert new network prefix, but the LAN size, client's interface will still
+advert new network prefix, but on the LAN side, client's interface will still
 have old prefix address listed. Normal script will not be able to distingish
 two (or even more) addresses, and randomly choose one
 to update.

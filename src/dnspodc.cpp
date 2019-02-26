@@ -29,7 +29,52 @@ static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n,
 	return 0;
 }
 
-std::string getifaddr(std::string ifname)
+static std::string getifaddrv4(std::string ifname)
+{
+	std::shared_ptr<ifaddrs> auto_free;
+
+	{
+		struct ifaddrs *ifaddr;
+
+		if (getifaddrs(&ifaddr) == -1)
+		{
+			perror("getifaddrs");
+			exit(EXIT_FAILURE);
+		}
+
+		auto_free.reset(ifaddr, freeifaddrs);
+	}
+
+
+	for (auto ifaddr_iterator = auto_free.get(); ifaddr_iterator != NULL; ifaddr_iterator = ifaddr_iterator->ifa_next)
+	{
+		if (ifaddr_iterator->ifa_addr == NULL)
+			continue;
+
+		if ( ifaddr_iterator->ifa_addr->sa_family==AF_INET )
+		{
+			if (ifname.empty() || ifname == ifaddr_iterator->ifa_name)
+			{
+				sockaddr_in * soaddr4 = (sockaddr_in * )ifaddr_iterator->ifa_addr;
+
+				boost::asio::ip::address_v4::bytes_type rawbytes_of_addr;
+				memcpy(rawbytes_of_addr.data(), & soaddr4->sin_addr, 4);
+
+				boost::asio::ip::address_v4 v4addr(rawbytes_of_addr);
+
+				if (rawbytes_of_addr[0] == 0xfd || rawbytes_of_addr[0] == 0xfc)
+					continue;
+
+				printf("\tInterface : <%s>\n",ifaddr_iterator->ifa_name );
+				printf("\t  Address : <%s>\n", v4addr.to_string().c_str());
+
+				return v4addr.to_string();
+			}
+		}
+	}
+}
+
+static std::string getifaddrv6(std::string ifname)
 {
 	std::shared_ptr<ifaddrs> auto_free;
 
@@ -145,11 +190,11 @@ std::string getifaddr(std::string ifname)
 	return addr_infos[0].addr_v6.to_string();
 }
 
-static void update_record(std::string login_token, std::string domain, std::string subdomain, std::string address);
+static void update_record(std::string login_token, std::string domain, std::string subdomain, std::string type, std::string address);
 
 int main(int argc, char* argv[])
 {
-	std::string domain, subdomain, login_token, dev, addr;
+	std::string domain, subdomain, login_token, dev, addr, type;
 	bool v6only;
 	bool noupdate = false;
 
@@ -162,6 +207,7 @@ int main(int argc, char* argv[])
 		("subdomain", po::value<std::string>(&subdomain), "subdomain for operation")
 		("v6only", po::value<bool>(&v6only)->default_value(true), "only update AAAA record")
 		("dev", po::value<std::string>(&dev), "interface name")
+		("type", po::value<std::string>(&type)->default_value("AAAA"), "update AAAA type or A type")
 		("addr", po::value<std::string>(&addr), "manual set ipv6 address instead of query from NIC")
 		("noupdate", "only print ipv6 address, no update")
 		;
@@ -183,15 +229,25 @@ int main(int argc, char* argv[])
 
 	if (addr.empty())
 	{
-		auto v6_address =  getifaddr(dev);
-		// now, update the record.
-		if (!noupdate)
-			update_record(login_token, domain, subdomain, v6_address);
+		if (type == "AAAA")
+		{
+			auto v6_address =  getifaddrv6(dev);
+			// now, update the record.
+			if (!noupdate)
+				update_record(login_token, domain, subdomain, type, v6_address);
+		}
+		else
+		{
+			auto v4_address =  getifaddrv4(dev);
+			// now, update the record.
+			if (!noupdate)
+				update_record(login_token, domain, subdomain, type, v4_address);
+		}
 	}
 	else
 	{
 		if (!noupdate)
-			update_record(login_token, domain, subdomain, addr);
+			update_record(login_token, domain, subdomain, type, addr);
 	}
 }
 
@@ -199,7 +255,7 @@ int main(int argc, char* argv[])
 
 #include "pay_utility.hpp"
 
-void update_record(std::string login_token, std::string domain, std::string subdomain, std::string address)
+void update_record(std::string login_token, std::string domain, std::string subdomain, std::string type, std::string address)
 {
 	boost::asio::io_context io;
 	// 首先, 登录到 dnspod 获取 domian id, 然后用 domain 获取 record_id
@@ -210,11 +266,11 @@ void update_record(std::string login_token, std::string domain, std::string subd
 		{ "domain", domain },
 		{ "sub_domain", subdomain },
 		{ "length", "3000" },
-		{ "record_type", "AAAA" },
+		{ "record_type", type },
 	};
 
 	easy_http_post(io, "https://dnsapi.cn/Record.List", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)},
-		[&io, login_token, domain, subdomain, address](boost::system::error_code ec, std::string response_body)
+		[&io, login_token, domain, subdomain, type, address](boost::system::error_code ec, std::string response_body)
 	{
 		if (ec)
 		{
@@ -242,7 +298,7 @@ void update_record(std::string login_token, std::string domain, std::string subd
 					{ "record_id", record_id },
 					{ "record_line", recordinfo["line"].string_value() },
 					{ "value", address },
-					{ "record_type", "AAAA" },
+					{ "record_type", type },
 				};
 
 				easy_http_post(io, "https://dnsapi.cn/Record.Modify", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)},

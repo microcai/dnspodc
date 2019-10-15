@@ -1,0 +1,6 @@
+[Unit]
+Description=Update DNS
+
+[Service]
+EnvironmentFile=/etc/dnspodc.conf
+ExecStart=@CMAKE_INSTALL_PREFIX@/bin/dnspodc --login_token $TOKEN --domain $DOMAIN --subdomain $SUBDOMAIN

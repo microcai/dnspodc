@@ -1,6 +1,0 @@
-[Unit]
-Description=Update DNS
-
-[Service]
-EnvironmentFile=/etc/dnspodc.conf
-ExecStart=/usr/bin/dnspodc --login_token $TOKEN --domain $DOMAIN --subdomain $SUBDOMAIN

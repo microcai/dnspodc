@@ -106,6 +106,8 @@ endif()
 
 add_subdirectory(src)
 
+configure_file(ddns.service.in ddns.service)
+
 install(FILES ddns.timer DESTINATION /usr/lib/systemd/system)
-install(FILES ddns.service DESTINATION /usr/lib/systemd/system)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ddns.service DESTINATION /usr/lib/systemd/system)
 

@@ -99,7 +99,11 @@ include_directories(3rd-src/avhttp/include)
 # real project stuff
 ##################
 add_subdirectory(utility)
+
+if(NOT WIN32)
 add_subdirectory(iproute2)
+endif()
+
 add_subdirectory(src)
 
 install(FILES ddns.timer DESTINATION /usr/lib/systemd/system)

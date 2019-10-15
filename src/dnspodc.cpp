@@ -8,70 +8,112 @@ using po::options_description;
 using po::variables_map;
 
 #include <sys/types.h>
+
+#ifdef _WIN32
+#include <iphlpapi.h>
+#pragma comment(lib, "Iphlpapi.lib")
+
+static std::string getifaddrv4(std::string ifname)
+{
+	std::vector<char> buf;
+	ULONG buf_len = 65536*5;
+	buf.resize(buf_len);
+	GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_DNS_SERVER, 0, reinterpret_cast<PIP_ADAPTER_ADDRESSES>(&buf[0]), &buf_len);
+
+	for (IP_ADAPTER_ADDRESSES* pinfo = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(&buf[0]); pinfo != NULL; pinfo = pinfo->Next)
+	{
+		for (IP_ADAPTER_UNICAST_ADDRESS* addr = pinfo->FirstUnicastAddress; addr != NULL; addr = addr->Next)
+		{
+			boost::asio::ip::address_v4::bytes_type rb;
+			memcpy(&rb, &(reinterpret_cast<const sockaddr_in*>(addr->Address.lpSockaddr)->sin_addr), 4);
+
+			if (rb[0] == 127)
+				continue;
+
+			boost::asio::ip::address_v4 v4addr{ rb };
+
+			return v4addr.to_string();
+		}
+	}
+
+	return "";
+}
+
+static std::string getifaddrv6(std::string ifname)
+{
+	std::vector<char> buf;
+	ULONG buf_len = 65536 * 5;
+	buf.resize(buf_len);
+	GetAdaptersAddresses(AF_INET6, GAA_FLAG_SKIP_DNS_SERVER, 0, reinterpret_cast<PIP_ADAPTER_ADDRESSES>(&buf[0]), &buf_len);
+
+	struct addr_info {
+		boost::asio::ip::address_v6 addr_v6;
+		ULONG valid_lft;
+	};
+
+	std::vector<addr_info> addr_infos;
+
+	for (IP_ADAPTER_ADDRESSES* pinfo = reinterpret_cast<PIP_ADAPTER_ADDRESSES>(&buf[0]); pinfo != NULL; pinfo = pinfo->Next)
+	{
+		for (IP_ADAPTER_UNICAST_ADDRESS* addr = pinfo->FirstUnicastAddress; addr != NULL; addr = addr->Next)
+		{
+			boost::asio::ip::address_v6::bytes_type rawbytes_of_addr;
+			memcpy(rawbytes_of_addr.data(), &(reinterpret_cast<const sockaddr_in6*>(addr->Address.lpSockaddr)->sin6_addr), 16);
+
+			boost::asio::ip::address_v6 v6addr(rawbytes_of_addr, reinterpret_cast<const sockaddr_in6*>(addr->Address.lpSockaddr)->sin6_scope_id);
+
+			if (v6addr.is_link_local() || v6addr.is_site_local() || v6addr.is_loopback())
+				continue;
+
+			if (rawbytes_of_addr[0] == 0xfd || rawbytes_of_addr[0] == 0xfc)
+				continue;
+
+
+			wprintf(L"\tInterface : <%s>\n", pinfo->FriendlyName);
+			printf("\t  Address : <%s>\n", v6addr.to_string().c_str());
+			addr_info info;
+			info.addr_v6 = v6addr;
+			info.valid_lft = addr->PreferredLifetime;
+			addr_infos.push_back(info);
+			
+
+		}
+	}
+
+	std::sort(addr_infos.begin(), addr_infos.end(), [](auto a, auto b)
+		{
+			return a.valid_lft > b.valid_lft;
+		});
+
+	// then sort by preferred_lft. biggest wins. use that address to notify DNSPOD.
+
+	if (addr_infos.empty())
+		return "";
+
+	printf("selected address <%s>\n", addr_infos[0].addr_v6.to_string().c_str());
+	return addr_infos[0].addr_v6.to_string();
+}
+
+#else
+
 #include <ifaddrs.h>
 
 extern "C" {
 #include "../iproute2/include/libnetlink.h"
 }
-
 typedef std::shared_ptr<nlmsghdr> nlmsg;
 
-static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n,
-		       void *arg)
+static int store_nlmsg(const struct sockaddr_nl* who, struct nlmsghdr* n,
+	void* arg)
 {
-	std::vector<nlmsg> & lchain = * (std::vector<nlmsg>*)arg;
-	struct nlmsg_list *h;
+	std::vector<nlmsg>& lchain = *(std::vector<nlmsg>*)arg;
+	struct nlmsg_list* h;
 
-	nlmsg copyed_nlmsg((nlmsghdr *) malloc(n->nlmsg_len), free);
+	nlmsg copyed_nlmsg((nlmsghdr*)malloc(n->nlmsg_len), free);
 	memcpy(copyed_nlmsg.get(), n, n->nlmsg_len);
 
 	lchain.push_back(copyed_nlmsg);
 	return 0;
-}
-
-static std::string getifaddrv4(std::string ifname)
-{
-	std::shared_ptr<ifaddrs> auto_free;
-
-	{
-		struct ifaddrs *ifaddr;
-
-		if (getifaddrs(&ifaddr) == -1)
-		{
-			perror("getifaddrs");
-			exit(EXIT_FAILURE);
-		}
-
-		auto_free.reset(ifaddr, freeifaddrs);
-	}
-
-
-	for (auto ifaddr_iterator = auto_free.get(); ifaddr_iterator != NULL; ifaddr_iterator = ifaddr_iterator->ifa_next)
-	{
-		if (ifaddr_iterator->ifa_addr == NULL)
-			continue;
-
-		if ( ifaddr_iterator->ifa_addr->sa_family==AF_INET )
-		{
-			if (ifname.empty() || ifname == ifaddr_iterator->ifa_name)
-			{
-				sockaddr_in * soaddr4 = (sockaddr_in * )ifaddr_iterator->ifa_addr;
-
-				boost::asio::ip::address_v4::bytes_type rawbytes_of_addr;
-				memcpy(rawbytes_of_addr.data(), & soaddr4->sin_addr, 4);
-
-				boost::asio::ip::address_v4 v4addr(rawbytes_of_addr);
-
-				if (rawbytes_of_addr[0] == 0xfd || rawbytes_of_addr[0] == 0xfc)
-					continue;
-
-				printf("\tInterface : <%s>\n",ifaddr_iterator->ifa_name );
-				printf("\t  Address : <%s>\n", v4addr.to_string().c_str());
-
-				return v4addr.to_string();
-			}
-		}
-	}
 }
 
 static std::string getifaddrv6(std::string ifname)
@@ -190,10 +232,60 @@ static std::string getifaddrv6(std::string ifname)
 	return addr_infos[0].addr_v6.to_string();
 }
 
+
+static std::string getifaddrv4(std::string ifname)
+{
+	std::shared_ptr<ifaddrs> auto_free;
+
+	{
+		struct ifaddrs* ifaddr;
+
+		if (getifaddrs(&ifaddr) == -1)
+		{
+			perror("getifaddrs");
+			exit(EXIT_FAILURE);
+		}
+
+		auto_free.reset(ifaddr, freeifaddrs);
+	}
+
+
+	for (auto ifaddr_iterator = auto_free.get(); ifaddr_iterator != NULL; ifaddr_iterator = ifaddr_iterator->ifa_next)
+	{
+		if (ifaddr_iterator->ifa_addr == NULL)
+			continue;
+
+		if (ifaddr_iterator->ifa_addr->sa_family == AF_INET)
+		{
+			if (ifname.empty() || ifname == ifaddr_iterator->ifa_name)
+			{
+				sockaddr_in* soaddr4 = (sockaddr_in*)ifaddr_iterator->ifa_addr;
+
+				boost::asio::ip::address_v4::bytes_type rawbytes_of_addr;
+				memcpy(rawbytes_of_addr.data(), &soaddr4->sin_addr, 4);
+
+				boost::asio::ip::address_v4 v4addr(rawbytes_of_addr);
+
+				if (rawbytes_of_addr[0] == 0xfd || rawbytes_of_addr[0] == 0xfc)
+					continue;
+
+				printf("\tInterface : <%s>\n", ifaddr_iterator->ifa_name);
+				printf("\t  Address : <%s>\n", v4addr.to_string().c_str());
+
+				return v4addr.to_string();
+			}
+		}
+	}
+}
+
+#endif
+
 static void update_record(std::string login_token, std::string domain, std::string subdomain, std::string type, std::string address);
 
 int main(int argc, char* argv[])
 {
+	setlocale(LC_ALL, "");
+
 	std::string domain, subdomain, login_token, dev, addr, type;
 	bool v6only;
 	bool noupdate = false;

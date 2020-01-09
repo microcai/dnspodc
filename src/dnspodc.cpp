@@ -326,7 +326,7 @@ int main(int argc, char* argv[])
 			auto v6_address =  getifaddrv6(dev);
 			// now, update the record.
 			if (noupdate)
-				std::cerr << v6_address << std::endl;
+				std::cout << v6_address << std::endl;
 			else
 				update_record(login_token, domain, subdomain, type, v6_address);
 		}

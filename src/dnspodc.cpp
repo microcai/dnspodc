@@ -2,6 +2,8 @@
 #include <string>
 #include <iostream>
 #include <boost/asio.hpp>
+#include <boost/asio/spawn.hpp>
+
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 using po::options_description;
@@ -255,9 +257,8 @@ int main(int argc, char* argv[])
 
 #include "pay_utility.hpp"
 
-void update_record(std::string login_token, std::string domain, std::string subdomain, std::string type, std::string address)
+void do_update_record(std::string login_token, std::string domain, std::string subdomain, std::string type, std::string address, boost::asio::yield_context yield_context)
 {
-	boost::asio::io_context io;
 	// 首先, 登录到 dnspod 获取 domian id, 然后用 domain 获取 record_id
 
 	std::vector<std::pair<std::string, std::string>> params = {
@@ -269,71 +270,60 @@ void update_record(std::string login_token, std::string domain, std::string subd
 		{ "record_type", type },
 	};
 
-	easy_http_post(io, "https://dnsapi.cn/Record.List", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)},
-		[&io, login_token, domain, subdomain, type, address](boost::system::error_code ec, std::string response_body)
+	std::string response_body;
+
+	response_body = easy_http_post("https://dnsapi.cn/Record.List", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)}, yield_context);
+
+	std::string err;
+	auto resp = json11::Json::parse(response_body, err);
+
+	if (resp["status"]["code"] == "1")
 	{
-		if (ec)
+		for (auto recordinfo : resp["records"].array_items())
 		{
-			std::cerr << "get record id failed: " << ec.message() << std::endl;
-			exit(1);
-		}
 
-		std::string err;
-		auto resp = json11::Json::parse(response_body, err);
+			auto record_id = recordinfo["id"].string_value();
 
-		if (resp["status"]["code"] == "1")
-		{
-			for (auto recordinfo : resp["records"].array_items())
+			std::cout << "record_id is " << record_id << std::endl;
+			// 有了 record_id 就可以更新 AAAA 记录了.
+
+			std::vector<std::pair<std::string, std::string>> params = {
+				{ "login_token", login_token },
+				{ "format" , "json" },
+				{ "domain", domain },
+				{ "sub_domain", subdomain },
+				{ "record_id", record_id },
+				{ "record_line", recordinfo["line"].string_value() },
+				{ "value", address },
+				{ "record_type", type },
+			};
+
+			response_body = easy_http_post("https://dnsapi.cn/Record.Info", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)}, yield_context);
+
+			response_body = easy_http_post("https://dnsapi.cn/Record.Modify", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)}, yield_context);
+
+			std::string err;
+			auto resp = json11::Json::parse(response_body, err);
+
+			if (resp["status"]["code"] == "1")
 			{
-
-				auto record_id = recordinfo["id"].string_value();
-
-				std::cout << "record_id is " << record_id << std::endl;
-
-				std::vector<std::pair<std::string, std::string>> params = {
-					{ "login_token", login_token },
-					{ "format" , "json" },
-					{ "domain", domain },
-					{ "sub_domain", subdomain },
-					{ "record_id", record_id },
-					{ "record_line", recordinfo["line"].string_value() },
-					{ "value", address },
-					{ "record_type", type },
-				};
-
-				easy_http_post(io, "https://dnsapi.cn/Record.Modify", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)},
-					[&io, login_token, domain, subdomain, address](boost::system::error_code ec, std::string response_body)
-				{
-					if (ec)
-					{
-						std::cerr << "update record failed: " << ec.message() << std::endl;
-						exit(1);
-					}
-
-					std::string err;
-					auto resp = json11::Json::parse(response_body, err);
-
-					if (resp["status"]["code"] == "1")
-					{
-						std::cout << "update success full" << std::endl;
-					}
-					else
-					{
-						std::cerr << response_body << std::endl;
-					}
-				});
-
+				std::cout << "update success full" << std::endl;
+			}
+			else
+			{
+				std::cerr << response_body << std::endl;
 			}
 		}
-		else
-		{
-			std::cerr << response_body << std::endl;
-		}
+	}
+	else
+	{
+		std::cerr << response_body << std::endl;
+	}
+}
 
-
-	});
-
-	// 有了 record_id 就可以更新 AAAA 记录了.
-
+void update_record(std::string login_token, std::string domain, std::string subdomain, std::string type, std::string address)
+{
+	boost::asio::io_context io;
+	boost::asio::spawn(io, boost::bind(do_update_record, login_token, domain, subdomain, type, address, _1));
 	io.run();
 }

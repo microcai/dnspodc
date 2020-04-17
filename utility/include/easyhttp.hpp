@@ -2,6 +2,7 @@
 
 #include <string>
 #include <boost/system/error_code.hpp>
+#include <boost/asio/spawn.hpp>
 #include "avhttp.hpp"
 
 void avhttp_enable_ssl(avhttp::http_stream& h);
@@ -13,3 +14,6 @@ void easy_http_get(boost::asio::io_context& io, std::string url, std::vector<std
 void easy_http_post(boost::asio::io_context& io, std::string url,
 	std::pair<std::string, std::string> post_content,
 	std::function<void(boost::system::error_code, std::string)>, std::string use_proxy = "");
+
+std::string easy_http_post(std::string url, std::pair<std::string, std::string> post_content, boost::asio::yield_context, std::string use_proxy = "");
+

@@ -119,3 +119,44 @@ void easy_http_post(boost::asio::io_context& io, std::string url, std::pair<std:
 		handler(ec, responseStr);
 	});
 }
+
+std::string easy_http_post(std::string url, std::pair<std::string, std::string> post_content, boost::asio::yield_context yield_context, std::string use_proxy = "")
+{
+	auto & io = boost::asio::get_associated_executor(io);
+	auto m_http_stream = std::make_shared<avhttp::http_stream>(io);
+	auto m_readbuf = std::make_shared<boost::asio::streambuf>();
+
+	avhttp::request_opts opt;
+
+	opt(avhttp::http_options::user_agent, "mozilla");
+	opt(avhttp::http_options::request_method, "POST");
+	opt(avhttp::http_options::request_body, post_content.second);
+	opt(avhttp::http_options::content_type, post_content.first);
+	opt(avhttp::http_options::content_length, std::to_string(post_content.second.length()));
+
+	m_http_stream->request_options(opt);
+
+	avhttp_set_proxy(*m_http_stream, use_proxy);
+	avhttp_enable_ssl(*m_http_stream);
+
+	boost::asio::async_completion<boost::asio::yield_context, void(boost::system::error_code, std::string)> init(yield_context);
+
+	avhttp::async_read_body(*m_http_stream, url, *m_readbuf, [m_readbuf, m_http_stream, handler = init.completion_handler](boost::system::error_code ec, std::size_t bytes_transfered)
+	{
+		if (ec || bytes_transfered <= 0)
+		{
+			handler(ec, "");
+			return;
+		}
+
+		// decode the returned data
+
+		std::string responseStr;
+		responseStr.resize(bytes_transfered);
+		m_readbuf->sgetn(&responseStr[0], bytes_transfered);
+
+		handler(ec, responseStr);
+	});
+
+	return init.result.get();
+}

@@ -84,11 +84,11 @@ find_package(Boost 1.64 COMPONENTS filesystem locale thread program_options rege
 
 else()
 set(Boost_USE_STATIC_LIBS ON)
-add_subdirectory(3rd-src/boost EXCLUDE_FROM_ALL)
-include_directories(3rd-src/boost)
-set(Boost_LIBRARIES Boost::filesystem Boost::system Boost::thread Boost::date_time Boost::program_options Boost::regex Boost::locale)
-
+set(Boost_LIBRARIES Boost::filesystem Boost::system Boost::thread Boost::date_time Boost::program_options Boost::regex Boost::locale Boost::coroutine)
 set(BOOST_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/3rd-src/boost)
+
+add_subdirectory(3rd-src/boost EXCLUDE_FROM_ALL)
+
 endif()
 
 add_subdirectory(3rd-src/json11)

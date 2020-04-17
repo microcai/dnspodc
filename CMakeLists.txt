@@ -80,7 +80,8 @@ if(WIN32)
 endif()
 
 if (USE_SYSTEM_BOOST)
-find_package(Boost 1.64 COMPONENTS filesystem locale thread program_options regex date_time)
+set(Boost_USE_STATIC_LIBS OFF)
+find_package(Boost 1.64 COMPONENTS filesystem locale thread program_options regex date_time coroutine)
 
 else()
 set(Boost_USE_STATIC_LIBS ON)

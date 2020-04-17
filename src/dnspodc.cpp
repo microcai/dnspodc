@@ -392,7 +392,17 @@ void do_update_record(boost::asio::io_context& io, std::string login_token, std:
 				{ "record_type", type },
 			};
 
-			response_body = easy_http_post(io, "https://dnsapi.cn/Record.Info", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)}, yield_context);
+			{
+				response_body = easy_http_post(io, "https://dnsapi.cn/Record.Info", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)}, yield_context);
+				std::string err;
+				auto resp = json11::Json::parse(response_body, err);
+
+				if (resp["record"]["value"] == address)
+				{
+					std::cout << "address not changed, nothing to update!" << std::endl;
+					return;
+				}
+			}
 
 			response_body = easy_http_post(io, "https://dnsapi.cn/Record.Modify", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)}, yield_context);
 

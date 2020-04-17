@@ -84,11 +84,16 @@ set(Boost_USE_STATIC_LIBS OFF)
 find_package(Boost 1.64 COMPONENTS filesystem locale thread program_options regex date_time coroutine)
 
 else()
-set(Boost_USE_STATIC_LIBS ON)
-set(Boost_LIBRARIES Boost::filesystem Boost::system Boost::thread Boost::date_time Boost::program_options Boost::regex Boost::locale Boost::coroutine)
-set(BOOST_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/3rd-src/boost)
+	add_definitions(-DBOOST_ALL_STATIC_LINK -DBOOST_AUTO_LINK_NOMANGLE)
+	add_definitions(-DBOOST_THREAD_USE_LIB)
 
-add_subdirectory(3rd-src/boost EXCLUDE_FROM_ALL)
+	set(Boost_USE_STATIC_LIBS	ON)
+	set(Boost_USE_STATIC_RUNTIME	ON)
+	set(BOOST_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/boost)
+
+	add_definitions(-DBOOST_LOCALE_HIDE_AUTO_PTR)
+	add_definitions(-DBOOST_COROUTINES_NO_DEPRECATION_WARNING)
+	add_subdirectory(3rd-src/boost)
 
 endif()
 

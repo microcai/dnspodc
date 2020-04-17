@@ -636,6 +636,7 @@ public:
 	typedef typename P0::lowest_layer_type lowest_layer_type;
 	typedef typename lowest_layer_type::endpoint_type endpoint_type;
 	typedef typename lowest_layer_type::protocol_type protocol_type;
+	typedef typename P0::executor_type executor_type;
 
 	explicit variant_stream(boost::asio::io_context& ios)
 		: m_io_service(ios), m_variant(boost::blank())

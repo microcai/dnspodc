@@ -114,11 +114,16 @@ read_body_op<AsyncReadStream, MutableBufferSequence, Handler>
 //  ...
 // @end example
 template<typename AsyncReadStream, typename MutableBufferSequence, typename Handler>
-AVHTTP_DECL void async_read_body(AsyncReadStream& stream,
-	const avhttp::url& url, MutableBufferSequence& buffers, Handler handler)
+AVHTTP_DECL BOOST_ASIO_INITFN_RESULT_TYPE(Handler, void(boost::system::error_code, std::size_t))
+async_read_body(AsyncReadStream& stream, const avhttp::url& url, MutableBufferSequence& buffers, Handler handler)
 {
-	detail::make_read_body_op(stream, url, buffers, handler);
+	//HANDLER_TYPE_CHECK(Handler, void(boost::system::error_code, std::size_t));
+
+	boost::asio::async_completion<Handler, void(boost::system::error_code, std::size_t)> init(handler);
+	detail::make_read_body_op(stream, url, buffers, init.completion_handler);
+	return init.result.get();
 }
+
 
 } // namespace avhttp
 

@@ -183,6 +183,8 @@ class http_stream
 {
 public:
 
+    typedef tcp::socket::executor_type executor_type;
+
 	/// Constructor.
 	AVHTTP_DECL explicit http_stream(boost::asio::io_context& io);
 

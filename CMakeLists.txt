@@ -3,7 +3,7 @@ project(dnspodc)
 cmake_policy(SET CMP0058 NEW)
 include(CheckCXXCompilerFlag)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -93,8 +93,7 @@ else()
 
 	add_definitions(-DBOOST_LOCALE_HIDE_AUTO_PTR)
 	add_definitions(-DBOOST_COROUTINES_NO_DEPRECATION_WARNING)
-	add_subdirectory(3rd-src/boost)
-
+	add_subdirectory(3rd-src/boost EXCLUDE_FROM_ALL)
 endif()
 
 add_subdirectory(3rd-src/json11)

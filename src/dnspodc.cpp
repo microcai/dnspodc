@@ -353,6 +353,7 @@ int main(int argc, char* argv[])
 
 void do_update_record(boost::asio::io_context& io, std::string login_token, std::string domain, std::string subdomain, std::string type, std::string address, boost::asio::yield_context yield_context)
 {
+	std::cout << "updating....\n";
 	// 首先, 登录到 dnspod 获取 domian id, 然后用 domain 获取 record_id
 
 	std::vector<std::pair<std::string, std::string>> params = {

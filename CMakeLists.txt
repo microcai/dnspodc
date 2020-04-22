@@ -81,7 +81,7 @@ endif()
 
 if (USE_SYSTEM_BOOST)
 set(Boost_USE_STATIC_LIBS OFF)
-find_package(Boost 1.64 COMPONENTS filesystem locale thread program_options regex date_time coroutine)
+find_package(Boost 1.64 COMPONENTS system filesystem locale thread program_options regex date_time coroutine)
 
 else()
 	add_definitions(-DBOOST_ALL_STATIC_LINK -DBOOST_AUTO_LINK_NOMANGLE)

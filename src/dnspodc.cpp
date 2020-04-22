@@ -353,7 +353,6 @@ int main(int argc, char* argv[])
 
 void do_update_record(boost::asio::io_context& io, std::string login_token, std::string domain, std::string subdomain, std::string type, std::string address, boost::asio::yield_context yield_context)
 {
-	std::cout << "updating....\n";
 	// 首先, 登录到 dnspod 获取 domian id, 然后用 domain 获取 record_id
 
 	std::vector<std::pair<std::string, std::string>> params = {
@@ -369,6 +368,7 @@ void do_update_record(boost::asio::io_context& io, std::string login_token, std:
 
 	response_body = easy_http_post(io, "https://dnsapi.cn/Record.List", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)}, yield_context);
 
+	std::cout << "updating....\n";
 	std::string err;
 	auto resp = json11::Json::parse(response_body, err);
 

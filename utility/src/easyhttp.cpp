@@ -32,15 +32,7 @@ void avhttp_set_proxy(avhttp::http_stream& h, std::string use_proxy)
 
 void avhttp_enable_ssl(avhttp::http_stream& h)
 {
-#ifdef _WIN32
 	h.check_certificate(false);
-#else
-	if (boost::filesystem::exists("/etc/ssl/certs/ca-bundle.crt"))
-		h.load_verify_file("/etc/ssl/certs/ca-bundle.crt");
-	else
-		h.add_verify_path("/etc/ssl/certs");
-	h.check_certificate(true);
-#endif
 }
 
 void easy_http_get(boost::asio::io_context& io, std::string url,
@@ -109,6 +101,7 @@ void easy_http_post(boost::asio::io_context& io, std::string url, std::pair<std:
 	{
 		if (ec || bytes_transfered <= 0)
 		{
+			std::cerr << ec.message() << "\n";
 			handler(ec, "");
 			return;
 		}

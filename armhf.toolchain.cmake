@@ -24,7 +24,7 @@ if(NOT CMAKE_FIND_ROOT_PATH_MODE_PACKAGE)
   set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 endif()
 
-set(CMAKE_SYSTEM_PROCESSOR mips)
+set(CMAKE_SYSTEM_PROCESSOR arm)
 
 set(CMAKE_C_COMPILER_ID_RUN TRUE)
 set(CMAKE_CXX_COMPILER_ID_RUN TRUE)
@@ -35,10 +35,10 @@ set(CMAKE_CXX_COMPILER_VERSION 6.3)
 set(CMAKE_C_STANDARD_COMPUTED_DEFAULT 11)
 set(CMAKE_CXX_STANDARD_COMPUTED_DEFAULT 14)
 
-find_program(CMAKE_C_COMPILER NAMES armhf-linux-gnu-gcc)
-find_program(CMAKE_CXX_COMPILER NAMES armhf-linux-gnu-g++)
-find_program(CMAKE_LINKER NAMES armhf-linux-gnu-ld)
-find_program(CMAKE_AR NAMES armhf-linux-gnu-ar)
+find_program(CMAKE_C_COMPILER NAMES arm-linux-gnueabihf-gcc)
+find_program(CMAKE_CXX_COMPILER NAMES arm-linux-gnueabihf-g++)
+find_program(CMAKE_LINKER NAMES arm-linux-gnueabihf-ld)
+find_program(CMAKE_AR NAMES arm-linux-gnueabihf-ar)
 
 set(CMAKE_CXX_COMPILER ${CMAKE_CXX_COMPILER})
 set(CMAKE_C_COMPILER ${CMAKE_C_COMPILER})

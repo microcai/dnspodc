@@ -2,7 +2,7 @@
 set(CMAKE_SYSTEM_VERSION 1)
 set(CMAKE_SYSTEM_NAME Linux-GNU)
 
-message(STATUS "using mips.toolchain.cmake")
+message(STATUS "using armhf.toolchain.cmake")
 
 # Allow users to override these values in case they want more strict behaviors.
 # For example, they may want to prevent the NDK's libz from being picked up so
@@ -24,7 +24,7 @@ if(NOT CMAKE_FIND_ROOT_PATH_MODE_PACKAGE)
   set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 endif()
 
-set(CMAKE_SYSTEM_PROCESSOR mips)
+set(CMAKE_SYSTEM_PROCESSOR aarch64)
 
 set(CMAKE_C_COMPILER_ID_RUN TRUE)
 set(CMAKE_CXX_COMPILER_ID_RUN TRUE)
@@ -35,12 +35,12 @@ set(CMAKE_CXX_COMPILER_VERSION 6.3)
 set(CMAKE_C_STANDARD_COMPUTED_DEFAULT 11)
 set(CMAKE_CXX_STANDARD_COMPUTED_DEFAULT 14)
 
-find_program(CMAKE_C_COMPILER NAMES mipsel-linux-gnu-gcc)
-find_program(CMAKE_CXX_COMPILER NAMES mipsel-linux-gnu-g++)
-find_program(CMAKE_LINKER NAMES mipsel-linux-gnu-ld)
-find_program(CMAKE_AR NAMES mipsel-linux-gnu-ar)
+find_program(CMAKE_C_COMPILER NAMES aarch64-linux-gnu-gcc)
+find_program(CMAKE_CXX_COMPILER NAMES aarch64-linux-gnu-g++)
+find_program(CMAKE_LINKER NAMES aarch64-linux-gnu-ld)
+find_program(CMAKE_AR NAMES aarch64-linux-gnu-ar)
 
 set(CMAKE_CXX_COMPILER ${CMAKE_CXX_COMPILER})
 set(CMAKE_C_COMPILER ${CMAKE_C_COMPILER})
 
-set(CMAKE_SIZEOF_VOID_P 4)
+set(CMAKE_SIZEOF_VOID_P 8)

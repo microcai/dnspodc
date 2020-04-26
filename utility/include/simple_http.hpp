@@ -82,6 +82,33 @@ namespace httpclient
 	static const std::string ie_user_agent = R"(Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko)";
 	static const std::string curl_user_agent = R"(curl/7.64.0)";
 
+	template<typename S>
+	struct do_grace_close
+	{
+		static void doit(S& stream, net::yield_context& yield);
+	};
+
+	template<>
+	struct do_grace_close<beast::ssl_stream<beast::tcp_stream>>
+	{
+		static void doit(beast::ssl_stream<beast::tcp_stream>& stream, net::yield_context& yield)
+		{
+			beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(30));
+			boost::system::error_code ignore_ec;
+			stream.async_shutdown(yield[ignore_ec]);
+		}
+	};
+
+	template<>
+	struct do_grace_close<beast::tcp_stream>
+	{
+		static void doit(beast::tcp_stream& stream, net::yield_context& yield)
+		{
+			boost::system::error_code ec;
+			stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+		}
+	};
+
 	class simple_http
 	{
 		using ssl_stream = beast::ssl_stream<beast::tcp_stream>;
@@ -222,7 +249,7 @@ namespace httpclient
 		// 关闭http底层调用, 强制返回.
 		void close()
 		{
-			boost::apply_visitor([](auto p) mutable
+			boost::apply_visitor([](auto&& p) mutable
 			{
 				boost::system::error_code ec;
 				if (p)
@@ -469,8 +496,8 @@ namespace httpclient
 				return ec;
 			}
 
-			ec = boost::apply_visitor([&](auto p) mutable
-					{ return do_perform(*p, req, result, yield); }
+			ec = boost::apply_visitor([this, &req, &result, &yield](auto&& p) mutable
+					{ return this->do_perform(*p, req, result, yield); }
 				, m_stream);
 
 			return ec;
@@ -571,21 +598,7 @@ namespace httpclient
 			if (ec)
 				return ec;
 
-			// Gracefully close the socket
-			if constexpr (std::is_same<std::decay_t<S>, ssl_stream>::value)
-			{
-				beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(30));
-				boost::system::error_code ignore_ec;
-				stream.async_shutdown(yield[ignore_ec]);
-			}
-			else if constexpr (std::is_same<std::decay_t<S>, tcp_stream>::value)
-			{
-				stream.socket().shutdown(tcp::socket::shutdown_both, ec);
-			}
-			else
-			{
-				static_assert("non-exhaustive visitor!");
-			}
+			do_grace_close<std::decay_t<S>>::doit(stream, yield);
 
 			return ec;
 		}

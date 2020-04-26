@@ -41,6 +41,33 @@ namespace asio_util {
 			handler(error, result);
 		}
 
+		template<bool>
+		struct do_invoke_handler
+		{
+			template <typename Handler, typename ResultType>
+			void do_result1(Handler&& handler, const boost::system::error_code& error, ResultType&& result);
+		};
+
+		template<>
+		struct do_invoke_handler<true>
+		{
+			template <typename Handler, typename ResultType>
+			void do_result1(Handler&& handler, const boost::system::error_code& error, ResultType&& result)
+			{
+				do_result(handler, error, *result);
+			}
+		};
+
+		template<>
+		struct do_invoke_handler<false>
+		{
+			template <typename Handler, typename ResultType>
+			void do_result1(Handler&& handler, const boost::system::error_code& error, ResultType&& result)
+			{
+				do_result(handler, error, result);
+			}
+		};
+
 		struct initiate_do_connect
 		{
 			template <typename Stream, typename Handler, typename Iterator, typename ResultType = void>
@@ -94,10 +121,12 @@ namespace asio_util {
 
 						boost::asio::dispatch(executor, [error, h, begin]() mutable
 						{
-							if constexpr (std::is_same<ResultType, typename Stream::endpoint_type>::value)
-								do_result(h, error, *begin);
-							if constexpr (!std::is_same<ResultType, typename Stream::endpoint_type>::value)
-								do_result(h, error, begin);
+							do_invoke_handler<std::is_same<ResultType, typename Stream::endpoint_type>::value>().do_result1(h, error, begin);
+
+// // 							if constexpr (std::is_same<ResultType, typename Stream::endpoint_type>::value)
+// // 								do_result(h, error, *begin);
+// // 							if constexpr (!std::is_same<ResultType, typename Stream::endpoint_type>::value)
+// // 								do_result(h, error, begin);
 						});
 					});
 				}

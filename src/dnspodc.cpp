@@ -3,6 +3,7 @@
 #include <iostream>
 #include <boost/asio.hpp>
 #include <boost/asio/spawn.hpp>
+#include <boost/bind.hpp>
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
@@ -295,6 +296,34 @@ static std::string getifaddrv4(std::string ifname)
 
 static void update_record(std::string login_token, std::string domain, std::string subdomain, std::string type, std::string address);
 
+static std::string prefix_to_string(boost::asio::ip::address_v6 v6_address, int prefix_len)
+{
+	std::stringstream ss;
+	// print prefix length!
+	for (int i=0; i < prefix_len / 8; i++)
+	{
+		if ( i > 0 &&  (i % 2 == 0))
+		{
+			ss << ':';
+		}
+
+		if (i % 2 ==0)
+		{
+			if ( v6_address.to_bytes()[i] != 0)
+			{
+				ss << std::hex << int(v6_address.to_bytes()[i]);
+			}
+		}
+		else
+		{
+			ss << std::hex << std::setfill('0') << std::setw(2) << int(v6_address.to_bytes()[i]);
+		}
+	}
+
+	ss << ':';
+	return ss.str();
+}
+
 int main(int argc, char* argv[])
 {
 	setlocale(LC_ALL, "");
@@ -302,6 +331,7 @@ int main(int argc, char* argv[])
 	std::string domain, subdomain, login_token, dev, addr, type;
 	bool v6only;
 	bool noupdate = false;
+	std::string euid;
 
 	options_description desc("options");
 	desc.add_options()
@@ -316,6 +346,7 @@ int main(int argc, char* argv[])
 		("addr", po::value<std::string>(&addr), "manual set ipv6 address instead of query from NIC")
 		("noupdate", "only print ipv6 address, no update")
 		("prefix", "print prefix, implies noupdate")
+		("euid", po::value<std::string>(&euid), "use this euid as host bit")
 		("verbose,v", "verbose log")
 		;
 
@@ -351,24 +382,18 @@ int main(int argc, char* argv[])
 
 			if (vm.count("prefix"))
 			{
-				// print prefix length!
-				for (int i=0; i < prefix_len / 8; i++)
-				{
-					if ( i > 0 &&  (i % 2 == 0))
-					{
-						printf(":");
-					}
+				std::cout << prefix_to_string(v6_address, prefix_len) << std::endl;
+				return 0;
+			}
 
-					if (i % 2 ==0)
-					{
-						if ( v6_address.to_bytes()[i] == 0)
-							continue;
-					}
-					printf("%02x", v6_address.to_bytes()[i]);
-				}
+			if (vm.count("euid"))
+			{
+				std::string constructed_addr = prefix_to_string(v6_address, prefix_len) + euid;
 
-				printf(":\n");
-
+				if (noupdate)
+					std::cout << constructed_addr << std::endl;
+				else
+					update_record(login_token, domain, subdomain, type, constructed_addr);
 				return 0;
 			}
 
@@ -400,6 +425,11 @@ int main(int argc, char* argv[])
 void do_update_record(boost::asio::io_context& io, std::string login_token, std::string domain, std::string subdomain, std::string type, std::string address, boost::asio::yield_context yield_context)
 {
 	// 首先, 登录到 dnspod 获取 domian id, 然后用 domain 获取 record_id
+
+	if (verbose_log)
+	{
+		std::cout << "update dns: " << subdomain << "." << domain << " => " << address << std::endl;
+	}
 
 	std::vector<std::pair<std::string, std::string>> params = {
 		{ "login_token", login_token },

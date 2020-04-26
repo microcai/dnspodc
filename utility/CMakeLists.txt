@@ -30,6 +30,7 @@ add_library(utility STATIC
 	src/ngx_setproctitle.cpp
 	src/dec_util.cpp
 	src/easyhttp.cpp
+	src/default_cert.cpp
 )
 
 target_link_libraries(utility Boost::regex Boost::date_time Boost::filesystem Boost::coroutine Boost::thread

@@ -2,7 +2,9 @@
 #include <boost/asio.hpp>
 #include <boost/asio/spawn.hpp>
 
+#include "avhttp.hpp"
 #include "easyhttp.hpp"
+#include "simple_http.hpp"
 
 void avhttp_set_proxy(avhttp::http_stream& h, std::string use_proxy)
 {
@@ -116,33 +118,28 @@ void easy_http_post(boost::asio::io_context& io, std::string url, std::pair<std:
 	});
 }
 
-std::string easy_http_post(boost::asio::io_context& io, std::string url, std::pair<std::string, std::string> post_content, boost::asio::yield_context yield_context, std::string use_proxy)
+std::string easy_http_post(boost::asio::io_context& io, std::string _url, std::pair<std::string, std::string> post_content, boost::asio::yield_context yield, std::string use_proxy)
 {
-	avhttp::http_stream m_http_stream{io};
-	boost::asio::streambuf m_readbuf;
+	boost::system::error_code ec;
+	util::uri url{url};
+	httpclient::simple_http s{boost::asio::get_associated_executor(yield)};
+	httpclient::http_request req{boost::beast::http::verb::post, url.path(), 11};
+	req.set(boost::beast::http::field::user_agent, HTTPD_VERSION_STRING);
+	req.set(boost::beast::http::field::host, url.host());
+	req.set(boost::beast::http::field::content_type, post_content.first);
 
-	avhttp::request_opts opt;
+	req.body() = post_content.second;
+	req.prepare_payload();
 
-	opt(avhttp::http_options::user_agent, "mozilla");
-	opt(avhttp::http_options::request_method, "POST");
-	opt(avhttp::http_options::request_body, post_content.second);
-	opt(avhttp::http_options::content_type, post_content.first);
-	opt(avhttp::http_options::content_length, std::to_string(post_content.second.length()));
+	httpclient::http_response res = s.async_perform(_url, req, yield[ec]);
 
-	m_http_stream.request_options(opt);
+	if (ec)
+		return "";
 
-	avhttp_set_proxy(m_http_stream, use_proxy);
-	avhttp_enable_ssl(m_http_stream);
+	if (res.result() == boost::beast::http::status::ok)
+		return boost::beast::buffers_to_string(res.body().data());
+	if (res.result() == boost::beast::http::status::bad_request)
+		return boost::beast::buffers_to_string(res.body().data());
 
-	boost::asio::async_completion<boost::asio::yield_context&, void(boost::system::error_code, std::string)> init(yield_context);
-
-	auto bytes_transfered = avhttp::async_read_body(m_http_stream, url, m_readbuf, yield_context);// [m_readbuf, m_http_stream, handler = init.completion_handler](boost::system::error_code ec, std::size_t bytes_transfered)
-
-	// decode the returned data
-
-	std::string responseStr;
-	responseStr.resize(bytes_transfered);
-	m_readbuf.sgetn(&responseStr[0], bytes_transfered);
-
-	return responseStr;
+	return "";
 }

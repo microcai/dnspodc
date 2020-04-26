@@ -11,6 +11,8 @@ using po::variables_map;
 
 #include <sys/types.h>
 
+static bool verbose_log = false;
+
 #ifdef _WIN32
 #include <iphlpapi.h>
 #pragma comment(lib, "Iphlpapi.lib")
@@ -118,7 +120,7 @@ static int store_nlmsg(const struct sockaddr_nl* who, struct nlmsghdr* n,
 	return 0;
 }
 
-static std::string getifaddrv6(std::string ifname)
+static std::tuple<boost::asio::ip::address_v6, int> getifaddrv6(std::string ifname)
 {
 	std::shared_ptr<ifaddrs> auto_free;
 
@@ -153,6 +155,7 @@ static std::string getifaddrv6(std::string ifname)
 
 	struct addr_info {
 		boost::asio::ip::address_v6 addr_v6;
+		int prefix_len;
 		int valid_lft;
 	};
 
@@ -179,8 +182,14 @@ static std::string getifaddrv6(std::string ifname)
 					if (rawbytes_of_addr[0] == 0xfd || rawbytes_of_addr[0] == 0xfc)
 						continue;
 
-					printf("\tInterface : <%s>\n",ifaddr_iterator->ifa_name );
-					printf("\t  Address : <%s>\n", v6addr.to_string().c_str());
+					if (v6addr.is_loopback())
+						continue;
+
+					if (verbose_log)
+					{
+						printf("\tInterface : <%s>\n",ifaddr_iterator->ifa_name );
+						printf("\t  Address : <%s>\n", v6addr.to_string().c_str());
+					}
 
 					for (auto _ainfo : ainfo)
 					{
@@ -206,10 +215,12 @@ static std::string getifaddrv6(std::string ifname)
 							if (rta_tb[IFA_CACHEINFO])
 							{
 								struct ifa_cacheinfo *ci = (struct ifa_cacheinfo *)(RTA_DATA(rta_tb[IFA_CACHEINFO]));
-								printf("\tvalid_lft : %d sec\n", ci->ifa_prefered);
+								if (verbose_log)
+									printf("\tvalid_lft : %d sec\n", ci->ifa_prefered);
 								addr_info info;
 								info.addr_v6 = v6addr;
 								info.valid_lft = ci->ifa_prefered;
+								info.prefix_len = ifa->ifa_prefixlen;
 								addr_infos.push_back(info);
 							}
 						}
@@ -228,12 +239,12 @@ static std::string getifaddrv6(std::string ifname)
 	// then sort by preferred_lft. biggest wins. use that address to notify DNSPOD.
 
 	if (addr_infos.empty())
-		return "";
+		return {boost::asio::ip::address_v6(), 0};
 
-	printf("selected address <%s>\n", addr_infos[0].addr_v6.to_string().c_str());
-	return addr_infos[0].addr_v6.to_string();
+	if (verbose_log)
+		printf("selected address <%s>\n", addr_infos[0].addr_v6.to_string().c_str());
+	return { addr_infos[0].addr_v6, addr_infos[0].prefix_len};//.to_string();
 }
-
 
 static std::string getifaddrv4(std::string ifname)
 {
@@ -295,7 +306,7 @@ int main(int argc, char* argv[])
 	options_description desc("options");
 	desc.add_options()
 		("help,h", "help message")
-		("version,v", "current sspay version")
+		("version", "current sspay version")
 		("login_token", po::value<std::string>(&login_token), "login_token for operation")
 		("domain", po::value<std::string>(&domain), "domain for operation")
 		("subdomain", po::value<std::string>(&subdomain), "subdomain for operation")
@@ -304,6 +315,8 @@ int main(int argc, char* argv[])
 		("type", po::value<std::string>(&type)->default_value("AAAA"), "update AAAA type or A type")
 		("addr", po::value<std::string>(&addr), "manual set ipv6 address instead of query from NIC")
 		("noupdate", "only print ipv6 address, no update")
+		("prefix", "print prefix, implies noupdate")
+		("verbose,v", "verbose log")
 		;
 
 	variables_map vm;
@@ -316,6 +329,8 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 
+	verbose_log = vm.count("verbose");
+
 	noupdate = vm.count("noupdate");
 
 	if (vm.count("login_token") ==0 || vm.count("domain") ==0 || vm.count("subdomain") ==0)
@@ -325,12 +340,43 @@ int main(int argc, char* argv[])
 	{
 		if (type == "AAAA")
 		{
-			auto v6_address =  getifaddrv6(dev);
+			boost::asio::ip::address_v6 v6_address;
+			int prefix_len;
+			std::tie(v6_address, prefix_len) = getifaddrv6(dev);
+
+			if (prefix_len == 0)
+			{
+				return 1;
+			}
+
+			if (vm.count("prefix"))
+			{
+				// print prefix length!
+				for (int i=0; i < prefix_len / 8; i++)
+				{
+					if ( i > 0 &&  (i % 2 == 0))
+					{
+						printf(":");
+					}
+
+					if (i % 2 ==0)
+					{
+						if ( v6_address.to_bytes()[i] == 0)
+							continue;
+					}
+					printf("%02x", v6_address.to_bytes()[i]);
+				}
+
+				printf(":\n");
+
+				return 0;
+			}
+
 			// now, update the record.
 			if (noupdate)
-				std::cout << v6_address << std::endl;
+				std::cout << v6_address.to_string() << std::endl;
 			else
-				update_record(login_token, domain, subdomain, type, v6_address);
+				update_record(login_token, domain, subdomain, type, v6_address.to_string());
 		}
 		else
 		{
@@ -367,8 +413,6 @@ void do_update_record(boost::asio::io_context& io, std::string login_token, std:
 	std::string response_body;
 
 	response_body = easy_http_post(io, "https://dnsapi.cn/Record.List", { "application/x-www-form-urlencoded; charset=utf-8", pay_utility::map_to_httpxform(params)}, yield_context);
-
-	std::cout << "updating....\n";
 	std::string err;
 	auto resp = json11::Json::parse(response_body, err);
 
@@ -379,7 +423,8 @@ void do_update_record(boost::asio::io_context& io, std::string login_token, std:
 
 			auto record_id = recordinfo["id"].string_value();
 
-			std::cout << "record_id is " << record_id << std::endl;
+			if (verbose_log)
+				std::cout << "record_id is " << record_id << std::endl;
 			// 有了 record_id 就可以更新 AAAA 记录了.
 
 			std::vector<std::pair<std::string, std::string>> params = {
@@ -400,7 +445,8 @@ void do_update_record(boost::asio::io_context& io, std::string login_token, std:
 
 				if (resp["record"]["value"] == address)
 				{
-					std::cout << "address not changed, nothing to update!" << std::endl;
+					if (verbose_log)
+						std::cout << "address not changed, nothing to update!" << std::endl;
 					return;
 				}
 			}
@@ -412,17 +458,20 @@ void do_update_record(boost::asio::io_context& io, std::string login_token, std:
 
 			if (resp["status"]["code"] == "1")
 			{
-				std::cout << "update success full" << std::endl;
+				if (verbose_log)
+					std::cout << "update success full" << std::endl;
 			}
 			else
 			{
-				std::cerr << response_body << std::endl;
+				if (verbose_log)
+					std::cerr << response_body << std::endl;
 			}
 		}
 	}
 	else
 	{
-		std::cerr << response_body << std::endl;
+		if (verbose_log)
+			std::cerr << response_body << std::endl;
 	}
 }
 

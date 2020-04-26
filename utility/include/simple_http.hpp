@@ -8,6 +8,8 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <boost/algorithm/string.hpp>
+
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/spawn.hpp>
 

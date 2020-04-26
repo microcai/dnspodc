@@ -121,8 +121,8 @@ void easy_http_post(boost::asio::io_context& io, std::string url, std::pair<std:
 std::string easy_http_post(boost::asio::io_context& io, std::string _url, std::pair<std::string, std::string> post_content, boost::asio::yield_context yield, std::string use_proxy)
 {
 	boost::system::error_code ec;
-	util::uri url{url};
-	httpclient::simple_http s{boost::asio::get_associated_executor(yield)};
+	util::uri url{_url};
+	httpclient::simple_http s{boost::asio::get_associated_executor(yield, io)};
 	httpclient::http_request req{boost::beast::http::verb::post, url.path(), 11};
 	req.set(boost::beast::http::field::user_agent, HTTPD_VERSION_STRING);
 	req.set(boost::beast::http::field::host, url.host());

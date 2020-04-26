@@ -96,7 +96,7 @@ namespace asio_util {
 						{
 							if constexpr (std::is_same<ResultType, typename Stream::endpoint_type>::value)
 								do_result(h, error, *begin);
-							else// if constexpr (!std::is_same_v<ResultType, typename Stream::endpoint_type>)
+							if constexpr (!std::is_same<ResultType, typename Stream::endpoint_type>::value)
 								do_result(h, error, begin);
 						});
 					});

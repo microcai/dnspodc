@@ -342,7 +342,7 @@ static std::string mac_to_v6_host_part(std::string mac_address_str)
 	eui64[4] = 0xFE;
 	std::sscanf(mac_address_str.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x", &eui64[0], &eui64[1], &eui64[2], &eui64[5], &eui64[6], &eui64[7]);
 
-	eui64[0] |= 0x2;
+	eui64[0] ^= 0x2;
 	// convert to host address part.
 
 	std::stringstream ss;

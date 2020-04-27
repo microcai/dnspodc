@@ -139,7 +139,7 @@ static std::tuple<boost::asio::ip::address_v6, int> getifaddrv6(std::string ifna
 
 	rtnl_handle rth;
 
-	rtnl_open(&rth, 0);
+	(void)rtnl_open(&rth, 0);
 	std::vector<nlmsg> linfo;
 	std::vector<nlmsg> ainfo;
 
@@ -290,6 +290,7 @@ static std::string getifaddrv4(std::string ifname)
 			}
 		}
 	}
+	return "";
 }
 
 #endif
@@ -299,6 +300,7 @@ static void update_record(std::string login_token, std::string domain, std::stri
 static std::string prefix_to_string(boost::asio::ip::address_v6 v6_address, int prefix_len)
 {
 	std::stringstream ss;
+	bool pre_is_zero;
 	// print prefix length!
 	for (int i=0; i < prefix_len / 8; i++)
 	{
@@ -311,16 +313,50 @@ static std::string prefix_to_string(boost::asio::ip::address_v6 v6_address, int 
 		{
 			if ( v6_address.to_bytes()[i] != 0)
 			{
+				pre_is_zero = false;
 				ss << std::hex << int(v6_address.to_bytes()[i]);
+			}
+			else
+			{
+				pre_is_zero = true;
 			}
 		}
 		else
 		{
-			ss << std::hex << std::setfill('0') << std::setw(2) << int(v6_address.to_bytes()[i]);
+			if (pre_is_zero)
+				ss << std::hex << int(v6_address.to_bytes()[i]);
+			else
+				ss << std::hex << std::setfill('0') << std::setw(2) << int(v6_address.to_bytes()[i]);
 		}
 	}
 
 	ss << ':';
+	return ss.str();
+}
+
+static std::string mac_to_v6_host_part(std::string mac_address_str)
+{
+	// convert mac to EUI-64
+	std::array<int, 8> eui64;
+	eui64[3] = 0xFF;
+	eui64[4] = 0xFE;
+	std::sscanf(mac_address_str.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x", &eui64[0], &eui64[1], &eui64[2], &eui64[5], &eui64[6], &eui64[7]);
+
+	eui64[0] |= 0x2;
+	// convert to host address part.
+
+	std::stringstream ss;
+	// print prefix length!
+	for (int i=0; i < 4; i++)
+	{
+		if ( i > 0 )
+		{
+			ss << ':';
+		}
+
+		int hexpart = (eui64[i*2] << 8) + (eui64[i*2+1]);
+		ss << std::hex << hexpart;
+	}
 	return ss.str();
 }
 
@@ -332,6 +368,7 @@ int main(int argc, char* argv[])
 	bool v6only;
 	bool noupdate = false;
 	std::string euid;
+	std::string mac;
 
 	options_description desc("options");
 	desc.add_options()
@@ -346,7 +383,8 @@ int main(int argc, char* argv[])
 		("addr", po::value<std::string>(&addr), "manual set ipv6 address instead of query from NIC")
 		("noupdate", "only print ipv6 address, no update")
 		("prefix", "print prefix, implies noupdate")
-		("euid", po::value<std::string>(&euid), "use this euid as host bit")
+		("eui", po::value<std::string>(&euid), "use this eui-64 as host bit")
+		("frommac", po::value<std::string>(&mac), "use this mac to caculate eui-64")
 		("verbose,v", "verbose log")
 		;
 
@@ -386,9 +424,20 @@ int main(int argc, char* argv[])
 				return 0;
 			}
 
-			if (vm.count("euid"))
+			if (vm.count("eui"))
 			{
 				std::string constructed_addr = prefix_to_string(v6_address, prefix_len) + euid;
+
+				if (noupdate)
+					std::cout << constructed_addr << std::endl;
+				else
+					update_record(login_token, domain, subdomain, type, constructed_addr);
+				return 0;
+			}
+
+			if (vm.count("frommac"))
+			{
+				std::string constructed_addr = prefix_to_string(v6_address, prefix_len) + mac_to_v6_host_part(mac);
 
 				if (noupdate)
 					std::cout << constructed_addr << std::endl;

@@ -39,7 +39,7 @@ struct field_table
             unsigned char const*>(s.data());
         while(n >= 4)
         {
-            std::uint32_t v;
+            boost::endian::little_uint32_t v;
             std::memcpy(&v, p, 4);
             r = r * 5 + ( v | 0x20202020 );
             p += 4;
@@ -71,7 +71,7 @@ struct field_table
             0xDFDFDFDFDFDFDFDF & ~Int{0});
         for(; n >= S; p1 += S, p2 += S, n -= S)
         {
-            boost::endian::little_int32_t  v1, v2;
+			boost::endian::little_uint32_t v1, v2;
             std::memcpy( &v1, p1, S );
             std::memcpy( &v2, p2, S );
             if((v1 ^ v2) & Mask)

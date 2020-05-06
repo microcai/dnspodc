@@ -15,6 +15,7 @@
 #include <array>
 #include <cstring>
 #include <boost/assert.hpp>
+#include <boost/endian/arithmetic.hpp>
 
 namespace boost {
 namespace beast {
@@ -70,7 +71,7 @@ struct field_table
             0xDFDFDFDFDFDFDFDF & ~Int{0});
         for(; n >= S; p1 += S, p2 += S, n -= S)
         {
-            Int v1, v2;
+            boost::endian::little_int32_t  v1, v2;
             std::memcpy( &v1, p1, S );
             std::memcpy( &v2, p2, S );
             if((v1 ^ v2) & Mask)
